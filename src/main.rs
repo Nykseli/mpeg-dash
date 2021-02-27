@@ -3,7 +3,8 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
-use std::thread;
+
+use mpeg_dash::ThreadPool;
 
 fn response_404(mut stream: SslStream<TcpStream>) {
     stream
@@ -12,7 +13,7 @@ fn response_404(mut stream: SslStream<TcpStream>) {
 }
 
 fn handle_client(mut stream: SslStream<TcpStream>) {
-    println!("Connection: {:?}", stream);
+    // println!("Connection: {:?}", stream);
     // TODO: dynamic size
     let mut buf = [0 as u8; 1024];
     // TODO: handle Err
@@ -20,7 +21,7 @@ fn handle_client(mut stream: SslStream<TcpStream>) {
 
     // TODO: is lossy a good (fast) option?
     let request_full = String::from_utf8_lossy(&buf);
-    println!("Request: {}", request_full);
+    // println!("Request: {}", request_full);
     // TODO: check all the lines
     // TODO: handle ERr
     let first_line = request_full.lines().next().unwrap();
@@ -79,12 +80,14 @@ fn main() {
 
     // TODO: get address and port from config
     let listener = TcpListener::bind("0.0.0.0:8443").unwrap();
+    // TODO: get pool size from config
+    // TODO: would we benefit from M:N model?
+    let pool = ThreadPool::new(4);
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let acceptor = acceptor.clone();
-                // TODO:: thread pool
-                thread::spawn(move || {
+                pool.execute(move || {
                     let stream = acceptor.accept(stream).unwrap();
                     handle_client(stream);
                 });
