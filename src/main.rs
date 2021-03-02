@@ -5,6 +5,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 
 use mpeg_dash::ThreadPool;
+mod config;
 
 fn response_404(mut stream: SslStream<TcpStream>) {
     stream
@@ -13,6 +14,8 @@ fn response_404(mut stream: SslStream<TcpStream>) {
 }
 
 fn handle_client(mut stream: SslStream<TcpStream>) {
+    let config = config::GlobalConfig::config();
+
     // println!("Connection: {:?}", stream);
     // TODO: dynamic size
     let mut buf = [0 as u8; 1024];
@@ -58,8 +61,9 @@ fn handle_client(mut stream: SslStream<TcpStream>) {
     };
 
     // TODO: handle Err
-    // TODO: get Access-Control-Allow-Origin from config
-    let out = format!("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-type: {}\r\nContent-Length: {}\r\n\r\n", file_type, file_data.len());
+    // let out = format!("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-type: {}\r\nContent-Length: {}\r\n\r\n", file_type, file_data.len());
+    let access_origin = &config.network.allow_origin[..];
+    let out = format!("HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: {}\r\nContent-type: {}\r\nContent-Length: {}\r\n\r\n", access_origin, file_type, file_data.len());
     stream.write(out.as_bytes()).unwrap();
     stream.write_all(&file_data[..]).unwrap();
     stream.flush().unwrap();
@@ -67,22 +71,26 @@ fn handle_client(mut stream: SslStream<TcpStream>) {
 
 // TODO: support for regular http
 fn main() {
+    // TODO: config path
+    // Config needs to be initialized here. See the init function for more information
+    config::GlobalConfig::init("config.json");
+    let config = config::GlobalConfig::config();
+
     let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
 
     acceptor
-        .set_private_key_file("private.pem", SslFiletype::PEM)
+        .set_private_key_file(&config.security.private_key_file[..], SslFiletype::PEM)
         .unwrap();
     acceptor
-        .set_certificate_file("cert.pem", SslFiletype::PEM)
+        .set_certificate_file(&config.security.certificate_file[..], SslFiletype::PEM)
         .unwrap();
     acceptor.check_private_key().unwrap();
     let acceptor = Arc::new(acceptor.build());
 
-    // TODO: get address and port from config
-    let listener = TcpListener::bind("0.0.0.0:8443").unwrap();
-    // TODO: get pool size from config
+    let address = format!("{}:{}", config.network.address, config.network.port);
+    let listener = TcpListener::bind(address).unwrap();
     // TODO: would we benefit from M:N model?
-    let pool = ThreadPool::new(4);
+    let pool = ThreadPool::new(config.performance.thread_pool_size);
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
