@@ -1,4 +1,5 @@
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslStream};
+use std::env;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -71,9 +72,15 @@ fn handle_client(mut stream: SslStream<TcpStream>) {
 
 // TODO: support for regular http
 fn main() {
-    // TODO: config path
+    let args: Vec<String> = env::args().collect();
+    let conf_path = if args.len() < 2 {
+        "config.json"
+    } else {
+        &args[1][..]
+    };
+
     // Config needs to be initialized here. See the init function for more information
-    config::GlobalConfig::init("config.json");
+    config::GlobalConfig::init(conf_path);
     let config = config::GlobalConfig::config();
 
     let mut acceptor = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
