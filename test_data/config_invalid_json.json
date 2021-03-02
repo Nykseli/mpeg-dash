@@ -1,0 +1,14 @@
+{
+    "network":
+        "address": "0.0.0.0",
+        "allowOrigin": "*"
+    },
+    "performance": {
+        "threadPoolSize": 4
+    },
+    "security": {
+        "https": true,
+        "privateKeyFile": "private.pem",
+        "certificateFile": "cert.pem"
+    }
+}

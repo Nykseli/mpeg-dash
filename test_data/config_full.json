@@ -1,0 +1,15 @@
+{
+    "network": {
+        "address": "127.0.0.1",
+        "port": "9443",
+        "allowOrigin": "255.255.255.1"
+    },
+    "performance": {
+        "threadPoolSize": 123
+    },
+    "security": {
+        "https": false,
+        "privateKeyFile": "private_test_path.pem",
+        "certificateFile": "cert_test_path.pem"
+    }
+}
