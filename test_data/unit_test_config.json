@@ -1,0 +1,15 @@
+{
+    "network": {
+        "address": "0.0.0.0",
+        "port": "8443",
+        "allowOrigin": "*"
+    },
+    "performance": {
+        "threadPoolSize": 1
+    },
+    "security": {
+        "https": true,
+        "privateKeyFile": "private.pem",
+        "certificateFile": "cert.pem"
+    }
+}
