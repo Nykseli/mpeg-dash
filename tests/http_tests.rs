@@ -1,6 +1,7 @@
-use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
+use openssl::ssl::{HandshakeError, SslConnector, SslMethod, SslStream, SslVerifyMode};
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::result::Result;
 
 use std::{thread, time};
 
@@ -56,7 +57,7 @@ impl TestServer {
         all_data.lines().next().unwrap().to_owned()
     }
 
-    fn start_server() {
+    pub fn start_server() {
         unsafe {
             if IS_SERVER_INIT {
                 return;
@@ -81,6 +82,15 @@ impl TestServer {
         let connector = connector.build();
         let stream = TcpStream::connect("localhost:8443").unwrap();
         return connector.connect("localhost", stream).unwrap();
+    }
+
+    /// Like create_tcp_stream but verifies the cert and won't connect
+    /// because the server uses self signed certs
+    pub fn create_tcp_stream_secure() -> Result<SslStream<TcpStream>, HandshakeError<TcpStream>> {
+        let connector = SslConnector::builder(SslMethod::tls()).unwrap();
+        let connector = connector.build();
+        let stream = TcpStream::connect("localhost:8443").unwrap();
+        return connector.connect("localhost", stream);
     }
 }
 
@@ -238,5 +248,16 @@ mod http_tests {
         let resp = server.get_response();
         assert!(resp.len() > 0);
         dash_document_succes(resp);
+    }
+
+    #[test]
+    fn invalid_cert_no_crash() {
+        TestServer::start_server();
+        for _ in 0..3 {
+            let server = TestServer::create_tcp_stream_secure();
+            // Connection always fails due the handshake error
+            // because we use self signed certs during tests
+            assert!(server.is_err());
+        }
     }
 }
