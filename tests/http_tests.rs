@@ -88,15 +88,12 @@ impl TestServer {
 mod http_tests {
     use super::*;
 
-    /// Named aaa_ so it's run first to set to buffer.
-    /// Other tests may fail because of this because the socket buffer is full off carbage
     #[test]
-    fn aaa_http_long_message() {
+    fn http_long_message() {
         let mut server = TestServer::new();
         let big_buff: [u8; 8192] = ['A' as u8; 8192];
         let result = server.first_response_line(&big_buff);
-        // TODO: should this be "HTTP/1.1 400 Bad Request"?
-        assert_eq!(result, "HTTP/1.1 405 Method Not Allowed");
+        assert_eq!(result, "HTTP/1.1 413 PAYLOAD TOO LARGE");
     }
 
     #[test]
@@ -112,6 +109,14 @@ mod http_tests {
         let result = server.get_all(b"GET / HTTP/1.0\r\n\r\n");
         let first_line = result.lines().next().unwrap();
         assert_eq!(first_line, "HTTP/1.1 404 NOT FOUND");
+    }
+
+    #[test]
+    fn post_request_with_body() {
+        let mut server = TestServer::new();
+        let result = server.get_all(b"POST / HTTP/1.0\r\n\r\nHere is some data for you!");
+        let first_line = result.lines().next().unwrap();
+        assert_eq!(first_line, "HTTP/1.1 405 Method Not Allowed");
     }
 
     #[test]
@@ -131,14 +136,36 @@ mod http_tests {
     }
 
     #[test]
-    #[should_panic]
     fn connection_timeout() {
         let mut server = TestServer::new();
-        for _ in 1..=100 {
-            let sleep_time = time::Duration::from_secs_f32(0.01);
-            thread::sleep(sleep_time);
-            server.write(b"A");
-        }
+        // The time needs to be higher than in test_data/unit_test_config.json
+        let sleep_time = time::Duration::from_secs_f32(6.0);
+        server.write(b"GET / ");
+        thread::sleep(sleep_time);
+        server.write(b"HTTP/1.0\r\n\r\n");
+
+        let resp = server.get_response();
+        assert_eq!(resp, "HTTP/1.1 408 REQUEST TIMEOUT\r\n\r\n");
+    }
+
+    #[test]
+    fn invalid_http_timeout() {
+        let mut server = TestServer::new();
+        server.write(b"A");
+
+        let resp = server.get_response();
+        assert_eq!(resp, "HTTP/1.1 408 REQUEST TIMEOUT\r\n\r\n");
+    }
+
+    #[test]
+    fn connection_timeout_success() {
+        let mut server = TestServer::new();
+        // Config needs to be atleast 5 seconds
+        let sleep_time = time::Duration::from_secs_f32(4.5);
+        let msg = format!("GET {} HTTP/1.0", DASH_DOCUMENT);
+        server.write(msg.as_bytes());
+        thread::sleep(sleep_time);
+        server.write(b"\r\n\r\n");
 
         // Needs to panic befor this
         let resp = server.get_response();
@@ -177,7 +204,24 @@ mod http_tests {
         let mut server = TestServer::new();
         server.write(b"GET ");
         server.write(DASH_DOCUMENT.as_bytes());
-        server.write(b"HTTP/1.0");
+        server.write(b" HTTP/1.0");
+        server.write(b"\r\n\r\n");
+
+        let resp = server.get_response();
+        assert!(resp.len() > 0);
+        dash_document_succes(resp);
+    }
+
+    #[test]
+    fn multi_part_msg_slow() {
+        let mut server = TestServer::new();
+        let sleep_time = time::Duration::from_secs_f32(0.2);
+        server.write(b"GET ");
+        thread::sleep(sleep_time);
+        server.write(DASH_DOCUMENT.as_bytes());
+        thread::sleep(sleep_time);
+        server.write(b" HTTP/1.0");
+        thread::sleep(sleep_time);
         server.write(b"\r\n\r\n");
 
         let resp = server.get_response();
