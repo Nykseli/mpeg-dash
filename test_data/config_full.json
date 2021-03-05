@@ -5,7 +5,8 @@
         "allowOrigin": "255.255.255.1"
     },
     "performance": {
-        "threadPoolSize": 123
+        "threadPoolSize": 123,
+        "connectionTimeout": 321.4
     },
     "security": {
         "https": false,

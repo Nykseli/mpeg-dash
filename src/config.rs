@@ -30,10 +30,17 @@ fn def_thread_pool_size() -> usize {
     4
 }
 
+/// Default tcp connection timeout in seconds
+fn def_tcp_connection_timeout() -> f64 {
+    // PHP / Apache seems to use 30 secs so that's probably a good value
+    30.0
+}
+
 /// Default structure for performance in Config
 fn def_performance() -> Performance {
     Performance {
         thread_pool_size: def_thread_pool_size(),
+        connection_timeout: def_tcp_connection_timeout(),
     }
 }
 
@@ -60,7 +67,7 @@ fn def_security() -> Security {
     }
 }
 
-#[derive(Debug, Deserialize, Eq)]
+#[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Network {
     /// IPv4 address.
@@ -79,15 +86,7 @@ pub struct Network {
     pub allow_origin: String,
 }
 
-impl PartialEq for Network {
-    fn eq(&self, other: &Self) -> bool {
-        self.address == other.address
-            && self.port == other.port
-            && self.allow_origin == other.allow_origin
-    }
-}
-
-#[derive(Debug, Deserialize, Eq)]
+#[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Performance {
     /// How many threads are handling the connection.
@@ -95,15 +94,12 @@ pub struct Performance {
     /// ## Defaults to 4.
     #[serde(default = "def_thread_pool_size")]
     pub thread_pool_size: usize,
+    /// How long will the server wait for data before closing the connection
+    #[serde(default = "def_tcp_connection_timeout")]
+    pub connection_timeout: f64,
 }
 
-impl PartialEq for Performance {
-    fn eq(&self, other: &Self) -> bool {
-        self.thread_pool_size == other.thread_pool_size
-    }
-}
-
-#[derive(Debug, Deserialize, Eq)]
+#[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Security {
     /// Is https enabled.
@@ -121,15 +117,7 @@ pub struct Security {
     pub private_key_file: String,
 }
 
-impl PartialEq for Security {
-    fn eq(&self, other: &Self) -> bool {
-        self.https == other.https
-            && self.certificate_file == other.certificate_file
-            && self.private_key_file == other.private_key_file
-    }
-}
-
-#[derive(Debug, Deserialize, Eq)]
+#[derive(Debug, Deserialize, PartialEq, PartialOrd)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     #[serde(default = "def_network")]
@@ -138,14 +126,6 @@ pub struct Config {
     pub performance: Performance,
     #[serde(default = "def_security")]
     pub security: Security,
-}
-
-impl PartialEq for Config {
-    fn eq(&self, other: &Self) -> bool {
-        self.network == other.network
-            && self.performance == other.performance
-            && self.security == other.security
-    }
 }
 
 /// Singleton wrapper for Config
@@ -261,6 +241,7 @@ mod config_tests {
                 },
                 performance: Performance {
                     thread_pool_size: 123,
+                    connection_timeout: 321.4,
                 },
             }
         );
