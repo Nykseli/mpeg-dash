@@ -1,6 +1,7 @@
+use openssl::ssl;
 use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod, SslStream};
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,6 +32,12 @@ fn is_end_of_header(buffer: &[u8]) -> bool {
     // This could be used if we could make sure that the buffer doesn't contain any body data
     // The method above is actually only really slower IF there is body data
     // buffer[buffer.len() - 4..buffer.len()] == end
+}
+
+/// Check if the error happend in I/O (false) or in ssl/tsl stack (true)
+fn is_ssl_error(error: ssl::Error) -> bool {
+    // Result returns ssl::Error as Result Err and io::Error as Ok
+    error.into_io_error().is_err()
 }
 
 /// 404 File not found
@@ -72,8 +79,7 @@ fn handle_client(mut stream: SslStream<TcpStream>) {
         //       with ./test_client.py this recieves data_len == 0 with vec![]
         //let mut buf2 = vec![];
         let mut temp_buf = [0 as u8; MAX_REQUEST_SIZE];
-        // TODO: should we use ssl_read for better error info?
-        match stream.read(&mut temp_buf) {
+        match stream.ssl_read(&mut temp_buf) {
             Ok(data_len) => {
                 buf.extend_from_slice(&temp_buf[..data_len]);
 
@@ -87,9 +93,15 @@ fn handle_client(mut stream: SslStream<TcpStream>) {
                     return;
                 }
             }
-            Err(_) => {
-                // TODO: what other errors there might be?
-                response_408(stream);
+            Err(error) => {
+                // If ssl_error happens, the connection is not usable so we
+                // can just ignore it but we can still handle the io errors
+                // TODO: figure out how to test the self signed cert error
+                // TODO: log ssl errors
+                if !is_ssl_error(error) {
+                    // TODO: what other errors there might be?
+                    response_408(stream);
+                }
                 return;
             }
         }
@@ -187,8 +199,10 @@ impl DashServer {
                 Ok(stream) => {
                     let acceptor = self.acceptor.clone();
                     self.thread_pool.execute(move || {
-                        let stream = acceptor.accept(stream).unwrap();
-                        handle_client(stream);
+                        // Ignore streams with tls handshake errors
+                        if let Ok(stream) = acceptor.accept(stream) {
+                            handle_client(stream);
+                        }
                     });
                 }
                 Err(e) => {
